@@ -1,0 +1,223 @@
+<html>
+	<head>
+		<script src='https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.4/MathJax.js?config=default'></script>
+		<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+		<style>
+			h1 {
+				text-align: center;
+			}
+
+			.container {
+				margin: 0 auto;
+				padding: 60px 20%;
+			}
+
+			figure {
+				text-align: center;
+			}
+
+			img {
+				display: inline-block;
+			}
+
+			body {
+				font-family: 'Inter', sans-serif;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="container">
+		<h1>CS184/284A Spring 2025 Homework 1 Write-Up</h1>
+		<div style="text-align: center;">Names: Julia Isaac and Richard Yang</div>
+
+		<br>
+
+		Link to webpage: <a href="https://ryang3881.github.io/cs184/hw1">https://ryang3881.github.io/cs184/hw1</a>
+		
+		<br>
+
+		Link to GitHub repository: <a href="https://github.com/cal-cs184-student/sp25-hw1-jewelz">https://github.com/cal-cs184-student/sp25-hw1-jewelz</a>
+
+		<!--
+		We've already added one heading per task, to make your write-up as navigable when grading. Please fit your write-up within these sections!
+		-->
+
+		<h2>Overview</h2>
+		In this homework, we began by implementing a basic rasterizer by drawing triangles, and then progressively added more improvements and features. We implemented supersampling to mitigate antialiasing, support for basic transformations like rotating, scaling, and translating, and using barycentric coordinates for smooth shading. We then implemented support for texture sampling and then level sampling with mipmaps to reduce aliasing.
+
+		<h2>Task 1: Drawing Single-Color Triangles</h2>
+		The way we rasterize triangles is as follows: 
+		Conceptually, the three points of a triangle form three half-planes, and the part we want to rasterize is the intersection of all three half-planes. We define a line function that, given a pair of points (P0, P1) and a third point (P), tells you what side of the half-plane formed by the pair of points the third point is on (or if it’s on the half-plane). This is done by defining vector V (as P - P0) and computing the dot product with the normal vector N (orthogonal to P1 - P0). We then compute a bounding box using minimum and maximum values of each point coordinates in x and y to “bound” the triangle in the smallest possible rectangle that encapsulates the triangle. For the basic implementation without supersampling we simply check the middle of each pixel in the bounding box with each edge of the triangle using the line function to determine what side(s) the middle of the pixel is on relative to each edge. Thus, the algorithm effectively checks each point that could be within the triangle in the minimal size rectangle, so it is never worse than checking every sample within the bounding box. If we find that the point is on the same side of all three edges, we fill in the pixel. This ensures that filling in works properly regardless of the winding order of vertices, because what specific direction counts as “inside” or “outside” of the edge can vary.
+
+				
+		<figure>
+			<img src="media/test4ss1.png" alt="Lion" style="width:50%"/>
+			<figcaption>basic/test4.svg</figcaption>
+		</figure>
+		
+		<h2>Task 2: Antialiasing by Supersampling</h2>
+		Rasterization with supersampling still works conceptually similarly to task 1, but it adds sample_rate as a factor. The main change was adding iterating over sqrt(sample_rate) in x and y to sample more points for more detail within each pixel. To support these increased samples, we must also account for more supersample buffer memory, which we just accomplish by multiplying the existing by sample_rate. The last change is in resolve_to_framebuffer, we fill the target framebuffer pixels with supersample buffer data by averaging each of r, g, and b color channels for all sample data. 
+
+		<p>Test 4</p>
+		<div style="display: flex; flex-direction: column; align-items: center;">
+			<table style="width: 100%; text-align: center; border-collapse: collapse;">
+			  <tr>
+				<td style="text-align: center;">
+				  <img src="media/test4ss1.png" width="400px"/>
+				  <figcaption>Supersample Rate 1</figcaption>
+				</td>
+				<td style="text-align: center;">
+				  <img src="media/test4ss4.png" width="400px"/>
+				  <figcaption>Supersample Rate 4</figcaption>
+				</td>
+			  </tr>
+			  <tr>
+				<td style="text-align: center;">
+				  <img src="media/test4ss9.png" width="400px"/>
+				  <figcaption>Supersample Rate 9</figcaption>
+				</td>
+				<td style="text-align: center;">
+				  <img src="media/test4ss16.png" width="400px"/>
+				  <figcaption>Supersample Rate 16</figcaption>
+				</td>
+			  </tr>
+			</table>
+		</div>
+
+		<h2>Task 3: Transforms</h2>
+		We wanted to do a side profile of cubeman running. There were lots of modifications required, including adding the rotating transform and translating the limbs appropriately. The main design choice we made here was to push the arms into the torso more and lessen gaps in the joints to make the arms shorter relative to the legs and make the figure look more proportional while running. Similarly, the gaps between the thighs and calves in the legs were widened to make the legs longer.
+
+		<figure>
+			<img src="media/cubeman.png" alt="Lion" style="width:50%"/>
+			<figcaption>Cubeman Running</figcaption>
+		</figure>
+
+		<h2>Task 4: Barycentric coordinates</h2>
+		Barycentric coordinates allow us to linearly interpolate between values (in this case colors) across a triangle.
+		
+		<figure>
+			<img src="media/task4img1.png" alt="Lion" style="width:50%"/>
+			<figcaption></figcaption>
+		</figure>
+
+		One way to think about implementing it geometrically is by calculating the distance perpendicular to each triangle edge (according the equation L(x,y)) and normalizing it by the distance from the triangle edge to each triangle vertex. Calculate these proportional distances for each vertex and you get three numbers, each representing how much that value contributes to the final value that point is assigned post lerp. 
+		
+		<figure>
+			<img src="media/task4img2.png" alt="Lion" style="width:50%"/>
+			<figcaption></figcaption>
+		</figure>
+
+		<figure>
+			<img src="media/task4img3.png" alt="Lion" style="width:50%"/>
+			<figcaption>svg/basic/test7.svg with default viewing parameters and sample rate 1</figcaption>
+		</figure>
+
+		<h2>Task 5: "Pixel sampling" for texture mapping</h2>
+		Pixel sampling allows us to determine the color of a pixel by looking up its corresponding texture value. Since textures are essentially 2D images mapped onto 3D surfaces, we often need to sample colors at non-integer u,v coordinates. I implemented this by finding u and v as a three way linear interpolation between alpha, beta, and gamma parameters given a 3 pairs of u,v for each triangle vertex. I implemented both nearest neighbor and bilinear filtering to control how colors are retrieved. In nearest neighbor, I find the closest texel to the given u,v coordinates and directly uses its color. I implement this by rounding the derived u,v coordinates to the nearest integer texel index (scaling up to the image dimensions). In bilinear filtering, we perform linear interpolation between the four nearest texels to the sampled u,v coordinate. I implemented this first by computing fractional u,v values, fetching the four closest texels, and blending their colors given the formula in the lecture slides.
+
+		<div style="display: flex; flex-direction: column; align-items: center;">
+			<table style="width: 100%; text-align: center; border-collapse: collapse;">
+			  <tr>
+				<td style="text-align: center;">
+				  <img src="media/task5img1.png" width="400px"/>
+				  <figcaption>Nearest Sampling, Sample Rate 1</figcaption>
+				</td>
+				<td style="text-align: center;">
+				  <img src="media/task5img2.png" width="400px"/>
+				  <figcaption>Bilinear Sampling, Sample Rate 1</figcaption>
+				</td>
+			  </tr>
+			  <tr>
+				<td style="text-align: center;">
+				  <img src="media/task5img3.png" width="400px"/>
+				  <figcaption>Nearest Sampling, Sample Rate 16</figcaption>
+				</td>
+				<td style="text-align: center;">
+				  <img src="media/task5img4.png" width="400px"/>
+				  <figcaption>Bilinear Sampling, Sample Rate 1</figcaption>
+				</td>
+			  </tr>
+			</table>
+		</div>
+
+		You can clearly visualize the difference between the two methods by examining the image of a bird, looking specifically at the details on its feathers. You can see that bilinear sampling (right two images) creates a smoother appearance, reducing jaggies whereas nearest neighbor may be more computationally efficient but prone to blocky artifacts. 
+
+
+		<h2>Task 6: "Level Sampling" with mipmaps for texture mapping</h2>
+		<p>
+			Level sampling allows us to determine the best mipmap level for a given pixel 
+			(where a mipmap is a texture pyramid where lower levels contain smaller, low-res 
+			copies of an image).
+		</p>
+	
+		<p>Here’s my implementation:</p>
+	
+		<ol>
+			<li>Calculating the <strong>u,v differences</strong> between the current sample point and moving one unit in x (dx) and moving one unit in y (dy).</li>
+			<li>Scaling these differences by the texture resolution (width & height).</li>
+			<li>Use formula from slides and take the <strong>maximum</strong> of these two values to get L.</li>
+			<li>Computing the final <strong>mipmap level</strong> as = log<sub>2</sub>(L).</li>
+		</ol>
+	
+		<p>
+			I have a switch “if” statement to handle the 3 level sampling methods. 
+			When <code>lsm == L_ZERO</code>, I use part 5 to sample from 0th mipmap level. 
+			When <code>lsm == L_NEAREST</code>, I round the computed mipmap level. 
+			When <code>lsm == L_LINEAR</code>, I treat mipmap level as a continuous number 
+			and compute a weighted <strong>sum of using</strong> one sample from each of the adjacent mipmap levels. 
+		</p>
+	
+		<p>The tradeoffs between sampling techniques:</p>
+	
+		<ol>
+			<li>
+				<strong>Pixel Sampling</strong>
+				<ul>
+					<li>Nearest is fast but low quality, bilinear is a good balance, and trilinear is higher quality but more expensive.</li>
+				</ul>
+			</li>
+			<li>
+				<strong>Level Sampling</strong>
+				<ul>
+					<li>Nearest is faster but can cause aliasing, linear is much smoother but requires more memory.</li>
+				</ul>
+			</li>
+			<li>
+				<strong>Number of Samples Per Pixel</strong>
+				<ul>
+					<li>More samples reduces aliasing but <strong>slow down</strong> rendering and <strong>increase</strong> memory usage.</li>
+				</ul>
+			</li>
+		</ol>
+
+		I found a png file of a Minecraft texture and here’s four versions of the image
+
+		<div style="display: flex; flex-direction: column; align-items: center;">
+			<table style="width: 100%; text-align: center; border-collapse: collapse;">
+			  <tr>
+				<td style="text-align: center;">
+				  <img src="media/task6img1.png" width="400px"/>
+				  <figcaption>L_ZERO and P_NEAREST</figcaption>
+				</td>
+				<td style="text-align: center;">
+				  <img src="media/task6img2.png" width="400px"/>
+				  <figcaption>L_ZERO and P_LINEAR</figcaption>
+				</td>
+			  </tr>
+			  <tr>
+				<td style="text-align: center;">
+				  <img src="media/task6img3.png" width="400px"/>
+				  <figcaption>L_NEAREST and P_NEAREST</figcaption>
+				</td>
+				<td style="text-align: center;">
+				  <img src="media/task6img4.png" width="400px"/>
+				  <figcaption>L_NEAREST and P_LINEAR	</figcaption>
+				</td>
+			  </tr>
+			</table>
+		</div>
+	
+
+		</div>
+	</body>
+</html>
